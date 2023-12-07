@@ -3,7 +3,9 @@ import Data.List
 
 main = do
     contents <- getContents
-    putStr (show(sum(checkGames(readGames(lines contents)))))
+    putStr (show (sum (checkGames (readGames (lines contents)))))
+    putStr "\n"
+    putStr (show (powerGames (readGames (lines contents))))
 
 data Game = End | GameSet Int Int Int Game deriving (Show)
 
@@ -39,3 +41,11 @@ checkGame (GameSet red green blue xs) = (red <= maxRed && green <= maxGreen && b
 
 checkGames :: [(Int,Game)] -> [Int]
 checkGames = map fst . filter (checkGame . snd)
+
+powerGame :: Game -> Int
+powerGame = aux 0 0 0 where
+    aux r g b End = r * g * b
+    aux r g b (GameSet red green blue xs) = aux (max r red) (max g green) (max b blue) xs
+
+powerGames :: [(Int,Game)] -> Int
+powerGames = sum . map (powerGame . snd)
