@@ -60,36 +60,85 @@ solve str = minimum . map (getLocation maps) $ seeds
 
 -- seedRanges :: String -> [Int]
 -- seedRanges = aux . seedList
---  where
---    aux [] = []
---    aux nums = [x .. x + r - 1] ++ (aux . drop 2 $ nums)
---      where
---        [x, r] = take 2 nums
+-- where
+--   aux [] = []
+--   aux nums = [x .. x + r - 1] ++ (aux . drop 2 $ nums)
+--     where
+--       [x, r] = take 2 nums
 --
 -- solve2 :: String -> Int
 -- solve2 str = minimum . map (\x -> foldr mapsNumber x $ reverse maps) $ seeds
+-- where
+--   maps = map parseMaps . splitMaps $ str
+--   seeds = seedRanges str
+
+-- validSeed :: [Int] -> Int -> Bool
+-- validSeed [] _ = False
+-- validSeed (x:y:xs) n
+--  | 0 <= n - x && n - x < y = True
+--  | otherwise = validSeed xs n
+--
+-- reverseMap :: Map -> Map
+-- reverseMap Map {dest = d, src = s, range = r} = Map {dest = s, src = d, range = r}
+--
+-- reverseMaps :: [Map] -> Int -> Int
+-- reverseMaps maps = mapsNumber (map reverseMap maps)
+--
+-- getSeed :: [[Map]] -> Int -> Int
+-- getSeed maps n = foldr reverseMaps n maps
+--
+-- solve2 :: String -> Int
+-- solve2 str = head . filter (validSeed seeds . getSeed maps) $ [1..]
 --  where
 --    maps = map parseMaps . splitMaps $ str
---    seeds = seedRanges str
+--    seeds = map read . tail . words . head . lines $ str
 
-validSeed :: [Int] -> Int -> Bool
-validSeed [] _ = False
-validSeed (x:y:xs) n
-  | 0 <= n - x && n - x < y = True
-  | otherwise = validSeed xs n
+type Interval = (Int, Int)
 
-reverseMap :: Map -> Map
-reverseMap Map {dest = d, src = s, range = r} = Map {dest = s, src = d, range = r}
+parseInterval :: [String] -> Interval
+parseInterval str = (x, x + r - 1) where
+  x = read . head $ str
+  r = read . last $ str
 
-reverseMaps :: [Map] -> Int -> Int
-reverseMaps maps = mapsNumber (map reverseMap maps)
+splitIntervals :: String -> [[String]]
+splitIntervals = aux . words
+  where
+    aux [] = []
+    aux (x:y:xs) = [x,y] : aux xs
 
-getSeed :: [[Map]] -> Int -> Int
-getSeed maps n = foldr reverseMaps n maps
--- foldr mapsNumber n reverseMaps
+parseIntervals :: String -> [Interval]
+parseIntervals = map parseInterval . splitIntervals . last . splitList ':' . head . lines
+
+data Mapped a = Mapped a | NotMapped a
+
+mapInterval :: Map -> Mapped Interval -> [Mapped Interval]
+mapInterval _ (Mapped i) = [Mapped i]
+mapInterval (Map {dest = d, src = s, range = r}) (NotMapped i@(x, y))
+  | x > s + r - 1 || y < s = [NotMapped i]
+  | x >= s && y <= s + r - 1 = [Mapped (d + x - s, d + y - s)]
+  | x >= s && x <= s + r - 1 = [Mapped (d + x - s, d + r - 1), NotMapped (s + r, y)]
+  | y >= s && y <= s + r - 1 = [NotMapped (x, s - 1), Mapped (d, d + y - s)]
+  | x < s && y > s + r - 1 = [NotMapped (x, s - 1), Mapped (s, s + r - 1), NotMapped (s + r, y)]
+
+mapIntervals :: Map -> [Mapped Interval] -> [Mapped Interval]
+mapIntervals map' = concatMap (mapInterval map')
+
+toNotMapped :: Mapped a -> Mapped a
+toNotMapped (Mapped x) = NotMapped x
+toNotMapped (NotMapped x) = NotMapped x
+
+-- myFold :: ([Map] -> [Mapped Interval] -> [Mapped Interval]) -> [[Map]] -> [Mapped Interval] -> [Mapped Interval]
+myFold _ [] intervals = intervals
+myFold f mapList@(x : xs) intervals = myFold f xs (f x intervals)
+
+locationIntervals :: [Map] -> [Mapped Interval] -> [Mapped Interval]
+locationIntervals maps intervals = map toNotMapped . foldl (flip mapIntervals) intervals $ maps
+
+deMap :: Mapped a -> a
+deMap (Mapped x) = x
+deMap (NotMapped x) = x
 
 solve2 :: String -> Int
-solve2 str = head . filter (validSeed seeds . getSeed maps) $ [1..]
-  where
-    maps = map parseMaps . splitMaps $ str
-    seeds = map read . tail . words . head . lines $ str
+solve2 str = minimum . map (fst . deMap) $ myFold locationIntervals mapList intervals where
+    mapList = map parseMaps . splitMaps $ str
+    intervals = map NotMapped . parseIntervals $ str
