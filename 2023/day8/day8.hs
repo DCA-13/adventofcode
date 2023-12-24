@@ -5,11 +5,11 @@ import Data.Maybe
 import System.IO
 
 main = do
- handle <- openFile "input" ReadMode
- contents <- hGetContents handle
- print . solve $ contents
- print . solve2 $ contents
- hClose handle
+  handle <- openFile "input" ReadMode
+  contents <- hGetContents handle
+  print . solve $ contents
+  print . solve2 $ contents
+  hClose handle
 
 data Node = Node {left :: String, right :: String} deriving (Show)
 
