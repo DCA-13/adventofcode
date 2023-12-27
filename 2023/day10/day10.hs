@@ -6,7 +6,7 @@ main = do
   handle <- openFile "input" ReadMode
   contents <- hGetContents handle
   print . solve $ contents
-  -- print . solve2 $ contents
+  print . solve2 $ contents
   hClose handle
 
 type Tiles = M.Map (Int, Int) Char
@@ -16,7 +16,7 @@ type Distances = M.Map (Int, Int) Int
 n2 = map (\n -> map (n,) [1 ..]) [1 ..]
 
 parseInput :: String -> Tiles
-parseInput = M.fromAscList . filter (\x -> snd x /= '.') . concat . zipWith zip n2 . lines
+parseInput = M.fromAscList . concat . zipWith zip n2 . lines
 
 findStart :: Tiles -> (Int, Int)
 findStart tiles = head . map fst $ filter (\x -> snd x == 'S') (M.assocs tiles)
@@ -55,3 +55,17 @@ solve input = maximum $ fullLoop tiles dists
   where
     tiles = parseInput input
     dists = initDists tiles
+
+isInLoop :: Tiles -> (Int, Int) -> Bool
+isInLoop loop (x,y) = odd . M.size . M.filterWithKey (\(a,b) c -> x - a == y - b && a < x && c /= '7' && c /= 'L' && c /= 'S') $ loop
+
+loopArea :: Tiles -> Tiles -> Int
+loopArea tiles loop = M.size . M.filterWithKey (\k _ -> isInLoop loop k) $ tiles
+
+solve2 :: String -> Int
+solve2 input = loopArea nonLoop loop
+  where
+    tiles = parseInput input
+    dists = initDists tiles
+    loop = M.intersection tiles $ fullLoop tiles dists
+    nonLoop = M.difference tiles loop
