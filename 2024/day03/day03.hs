@@ -33,6 +33,13 @@ instance Alternative Parser where
   empty = Parser $ const Nothing
   (Parser p1) <|> (Parser p2) = Parser $ \input -> p1 input <|> p2 input
 
+instance Monad Parser where
+  return = pure
+  Parser f >>= g = Parser $ \input ->
+    case f input of
+      Nothing -> Nothing
+      Just (str, a) -> runParser (g a) str
+
 charP :: Char -> Parser Char
 charP x = Parser f
   where
@@ -62,13 +69,6 @@ intP = read <$> spanP' isDigit
 spaceP :: Parser String
 spaceP = spanP isSpace
 
-instance Monad Parser where
-  return = pure
-  Parser f >>= g = Parser $ \input ->
-    case f input of
-      Nothing -> Nothing
-      Just (str, a) -> runParser (g a) str
-
 mulP :: Parser Int
 mulP = do
   stringP "mul("
@@ -78,13 +78,29 @@ mulP = do
   charP ')'
   return (x * y)
 
-nonMulP :: Parser Int
-nonMulP = Parser $ \case
+skipP :: Parser Int
+skipP = Parser $ \case
   "" -> Nothing
   (x : xs) -> Just (xs, 0)
 
+dropWhileP :: (Char -> Bool) -> Parser Int
+dropWhileP f = Parser $ \case
+  "" -> Nothing
+  input@(x : xs) -> if not $ f x then Nothing else Just (dropWhile f input, 0)
+
+manyTill :: Parser a -> Parser b -> Parser [a]
+manyTill p end = scan
+  where
+    scan = (do _ <- end; return []) <|> (do x <- p; xs <- scan; return (x : xs))
+
+lookAhead :: Parser a -> Parser a
+lookAhead (Parser p) = Parser $ \input -> fmap (\(_, x) -> (input, x)) (p input)
+
+eofP :: Parser Int
+eofP = Parser $ \input -> if input == "" then Just ("", 0) else Nothing
+
 solveP :: Parser Int
-solveP = sum <$> many (mulP <|> nonMulP)
+solveP = sum <$> many (manyTill skipP (lookAhead (mulP <|> eofP)) *> mulP)
 
 solve :: String -> Int
 solve input = maybe 0 snd (runParser solveP input)
