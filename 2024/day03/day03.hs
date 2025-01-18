@@ -3,6 +3,7 @@
 module Main where
 
 import Control.Applicative
+import Control.Monad
 import Data.Char
 import Data.Maybe
 import System.IO
@@ -11,7 +12,7 @@ main = do
   handle <- openFile "input" ReadMode
   contents <- hGetContents handle
   print . solve $ contents
-  -- print . solve2 $ contents
+  print . solve2 $ contents
   hClose handle
 
 newtype Parser a = Parser {runParser :: String -> Maybe (String, a)}
@@ -78,29 +79,39 @@ mulP = do
   charP ')'
   return (x * y)
 
-skipP :: Parser Int
+skipP :: Parser ()
 skipP = Parser $ \case
   "" -> Nothing
-  (x : xs) -> Just (xs, 0)
-
-dropWhileP :: (Char -> Bool) -> Parser Int
-dropWhileP f = Parser $ \case
-  "" -> Nothing
-  input@(x : xs) -> if not $ f x then Nothing else Just (dropWhile f input, 0)
+  (x : xs) -> Just (xs, ())
 
 manyTill :: Parser a -> Parser b -> Parser [a]
 manyTill p end = scan
   where
-    scan = (do _ <- end; return []) <|> (do x <- p; xs <- scan; return (x : xs))
+    scan = ([] <$ end) <|> (do x <- p; xs <- scan; return (x : xs))
 
 lookAhead :: Parser a -> Parser a
 lookAhead (Parser p) = Parser $ \input -> fmap (\(_, x) -> (input, x)) (p input)
 
-eofP :: Parser Int
-eofP = Parser $ \input -> if input == "" then Just ("", 0) else Nothing
+eofP :: Parser ()
+eofP = Parser $ \input -> if input == "" then Just ("", ()) else Nothing
 
 solveP :: Parser Int
-solveP = sum <$> many (manyTill skipP (lookAhead (mulP <|> eofP)) *> mulP)
+solveP = sum <$> many (manyTill skipP (lookAhead (mulP <|> 0 <$ eofP)) *> mulP)
 
 solve :: String -> Int
 solve input = maybe 0 snd (runParser solveP input)
+
+doP = void $ stringP "do()"
+
+dontP = void $ stringP "don't()"
+
+anyCharP :: Parser Char
+anyCharP = Parser $ \case
+  "" -> Nothing
+  (x : xs) -> Just (xs, x)
+
+solve2P :: Parser Int
+solve2P = sum <$> many ((solve <$> manyTill anyCharP dontP) <* manyTill anyCharP (doP <|> eofP))
+
+solve2 :: String -> Int
+solve2 input = maybe 0 snd (runParser solve2P $ input ++ "don't()")
