@@ -1,42 +1,61 @@
-import Control.Monad
-import Data.Array
-import Data.Char
-import Data.List
-import System.IO
+import Data.List (intercalate, partition)
 
 main = do
-  handle <- openFile "input" ReadMode
-  contents <- hGetContents handle
-  print . solve $ contents
-  -- print . solve2 $ contents
-  hClose handle
+  input <- readFile "input"
+  print . solve $ input
+  print . solve2 $ input
 
-groups :: String -> [Int]
-groups = map length . filter (\x -> nub x == "#") . group
+data Row = Row {past :: String, record :: String, groups :: [Int], counter :: Int, currGroup :: Int, num :: Int}
 
-parseNumbers :: String -> [Int]
-parseNumbers [] = []
-parseNumbers str = read $ "[" ++ str ++ "]"
+instance Show Row where
+  show (Row p r g c cg n) = unwords ["Row", show $ reverse p, show r, show g, 'c' : show c, 'g' : show cg, 'n' : show n] ++ "\n"
 
-substitute :: String -> String -> String
-substitute str [] = str
-substitute [] _ = []
-substitute (x : xs) (y : ys) = if x /= '?' then x : substitute xs (y : ys) else y : substitute xs ys
+test = "?###???????? 3,2,1"
 
-combinations :: a -> a -> Int -> Int -> [[a]]
-combinations x _ n 0 = [replicate n x]
-combinations _ y 0 m = [replicate m y]
-combinations x y n m = map (x :) (combinations x y (n - 1) m) ++ map (y :) (combinations x y n (m - 1))
+unfoldRow :: Row -> Row
+unfoldRow (Row p r gs c g n) = Row p (intercalate "?" . replicate 5 $ r) (concat . replicate 5 $ gs) c g n
 
-matches :: String -> Int
-matches str = length . filter (\c -> groups c == correctAmounts) $ cases
+nextSpring :: Row -> [Row]
+nextSpring (Row _ [] gs c g n) = error "ran out of input"
+nextSpring row@(Row p (r : rs) gs c g n) = case r of
+  '?' -> concatMap nextSpring [row {record = '.' : rs}, row {record = '#' : rs}]
+  '.'
+    | c == 0 -> [Row (r : p) rs gs 0 g n]
+    | c == gs !! g -> [Row (r : p) rs gs 0 (g + 1) n]
+    | otherwise -> []
+  '#'
+    | g == length gs -> []
+    | c == gs !! g -> []
+    | otherwise -> [Row (r : p) rs gs (c + 1) g n]
+  e -> error $ "unexpected " ++ [e] ++ ", expected .#?"
+
+combineRows :: [Row] -> [Row]
+combineRows [] = []
+combineRows (r : rs) = newRow : combineRows rest
   where
-    [springs, contiguous] = words str
-    correctAmounts = parseNumbers contiguous
-    perms = nub $ combinations '#' '.' k (n - k)
-    n = length . filter (== '?') $ springs
-    k = sum correctAmounts - (length . filter (== '#') $ springs)
-    cases = map (substitute springs) perms
+    identical r1 r2 = counter r1 == 0 && counter r2 == 0 && currGroup r1 == currGroup r2
+    (idRows, rest) = partition (identical r) rs
+    newRow = r {num = num r + sum (map num idRows)}
+
+step :: [Row] -> [Row]
+step = combineRows . concatMap nextSpring
+
+validateRow :: Row -> Bool
+validateRow (Row p r gs c g n) = g == length gs || g == length gs - 1 && c == last gs
+
+solveRow :: Row -> Int
+solveRow row = sum $ map num valid
+  where
+    total = iterate step [row] !! (length . record $ row)
+    valid = filter validateRow total
+
+parseRow :: String -> Row
+parseRow str = Row "" r (read $ "[" ++ g ++ "]") 0 0 1
+  where
+    [r, g] = words str
 
 solve :: String -> Int
-solve = sum . map matches . lines
+solve input = sum . map (solveRow . parseRow) $ lines input
+
+solve2 :: String -> Int
+solve2 input = sum . map (solveRow . unfoldRow . parseRow) $ lines input
